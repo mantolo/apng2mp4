@@ -1,6 +1,6 @@
 {
     "name": "apng2mp4",
-    "version": "0.0.1",
+    "version": "0.0.2",
     "description": "Converts APNG to MP4 video using ffmpeg with regards frame delays",
     "main": "index.js",
     "scripts": {
@@ -11,7 +11,7 @@
     "author": "mantolo",
     "license": "MIT",
     "dependencies": {
-        "canvas": "^1.6.5",
+        "canvas": "^2.6.1",
         "performance-now": "^2.1.0",
         "raf": "^3.3.2",
         "vinyl-fs": "^2.4.4"

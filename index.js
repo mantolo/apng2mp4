@@ -3,8 +3,7 @@ const parseAPNG = require('./apng/parser').parseAPNG;
 const Player = require('./apng/player').Player;
 const vfs = require('vinyl-fs');
 const through = require('through2');
-const Canvas = require('canvas'),
-    Image = Canvas.Image;
+const { createCanvas, Image } = require('canvas');
 
 // Credits:
 // davidmz: https://github.com/davidmz/apng-js
@@ -19,10 +18,19 @@ const backgroundColor = "#FFFFFF";
 const frameInterval = 1000 / fps;
 
 function convertAPNG2MP4() {
+    var processCount = 0;
+    var proceed;
+
+    const checkProceed = function checkProceed() {
+        if (proceed && processCount === 0) {
+            proceed();
+        }
+    }
+
     const onAPNGChunk = function onAPNGChunk(f, enc, flush) {
         var apng = parseAPNG(f.contents);
         if (apng instanceof Error) console.info('ERROR in ' + f.basename);
-
+        processCount++;
 
         // Prepare all graphical information
 
@@ -37,9 +45,20 @@ function convertAPNG2MP4() {
                 //console.log(`stdout: ${stdout}`); // prints ffmpeg output
                 //console.log(`stderr: ${stderr}`); // prints ffmpeg output
             });
+
+        recorder.once('exit', function(e) {
+            processCount--;
+            if (e !== 0) {
+                console.log(e, f.basename + ' conversion failed');
+            } else {
+                console.log('=> ' + f.basename + '.mp4');
+            }
+            checkProceed();
+        });
+
         console.log(expectedFrames + ' frames APNG:', commandStr);
 
-        canvas = new Canvas(apng.width, apng.height);
+        canvas = createCanvas(apng.width, apng.height);
         ctx = canvas.getContext('2d');
 
         // use fill rect over clear rect
@@ -106,7 +125,7 @@ function convertAPNG2MP4() {
     };
 
     const onLastChunk = function onLastChunk(callback) {
-        callback();
+        proceed = callback;
     };
 
     return through.obj(onAPNGChunk, onLastChunk);
