@@ -4,6 +4,7 @@ const Player = require('./apng/player').Player;
 const vfs = require('vinyl-fs');
 const through = require('through2');
 const { createCanvas, Image } = require('canvas');
+const path = require('path');
 
 // Credits:
 // davidmz: https://github.com/davidmz/apng-js
@@ -12,14 +13,27 @@ const { createCanvas, Image } = require('canvas');
 // FFMPEG: https://trac.ffmpeg.org/wiki/Encode/H.264
 //         https://trac.ffmpeg.org/wiki/Slideshow
 
+/**
+ * 
+    Video must be in .WEBM format, up to 30 FPS.
+    Video must be encoded with the VP9 codec.
+    Video must have no audio stream.
+    One side must be 512 pixels in size – the other side can be 512 pixels or less.
+    Duration must not exceed 3 seconds.
+    Video must have a transparent layer (this is no longer required).
+    Video should be looped for optimal user experience.
+    Video size should not exceed 256 KB after encoding.
+
+ */
+
 const fps = 30;
-const crf = 20;
+const crf = 40;
 const backgroundColor = "#FFFFFF";
 const frameInterval = 1000 / fps;
 
 function convertAPNG2MP4() {
     var processCount = 0;
-    var proceed;
+    var proceed = null;
 
     const checkProceed = function checkProceed() {
         if (proceed && processCount === 0) {
@@ -34,8 +48,8 @@ function convertAPNG2MP4() {
 
         // Prepare all graphical information
 
-        const commandStr = `"ffmpeg/bin/ffmpeg" -y -f image2pipe -vcodec png -r ${fps} -i - -pix_fmt yuv420p -vcodec libx264 -preset veryslow -crf ${crf} -movflags +faststart -r ${fps} ${f.basename}.mp4`;
-        const expectedFrames = Math.round(apng.playTime / frameInterval) * apng.numPlays; // get expected total frames from animaion        
+        const commandStr = `"${__dirname}/ffmpeg/bin/ffmpeg" -y -f image2pipe -vcodec png -r ${fps} -i - -pix_fmt rgba -vf "scale=w=512:h=512:force_original_aspect_ratio=decrease" -vcodec libvpx-vp9 -crf ${crf} -b:v 0 -r ${fps} ${f.dirname}/${f.basename}.webm`;
+        const expectedFrames = Math.round(apng.playTime / frameInterval) /* * apng.numPlays */; // get expected total frames from animaion        
         const recorder = exec(commandStr,
             function(error, stdout, stderr) {
                 if (error) {
@@ -51,7 +65,7 @@ function convertAPNG2MP4() {
             if (e !== 0) {
                 console.log(e, f.basename + ' conversion failed');
             } else {
-                console.log('=> ' + f.basename + '.mp4');
+                console.log('=> ' + f.basename + '.webm');
             }
             checkProceed();
         });
@@ -60,14 +74,6 @@ function convertAPNG2MP4() {
 
         canvas = createCanvas(apng.width, apng.height);
         ctx = canvas.getContext('2d');
-
-        // use fill rect over clear rect
-        ctx.clearRect = function(left = 0, top = 0, width = 0, height = 0) {
-            ctx.save();
-            ctx.fillStyle = backgroundColor; // feel free to fill with custom color ~
-            ctx.fillRect(left, top, width, height);
-            ctx.restore();
-        }
 
         // force render first frame
         var firstFrame = apng.frames[0];
@@ -79,8 +85,6 @@ function convertAPNG2MP4() {
         firstFrame.startOffset = apng.frames.reduce(function(startOffset, frame, i, frames) {
             var frameNum = (i + 1) % frames.length; // frame 0 is the fallback image unsupported browser would use, so start with frame 1 and put 0 at the back.
             var f = frames[frameNum];
-            var url;
-            var data;
 
             f.startOffset = startOffset + f.delay; // offset is used later for soft-playback 
 
@@ -132,9 +136,13 @@ function convertAPNG2MP4() {
 }
 
 // Workflow
-var pngStream = vfs.src('./*.png')
-    .pipe(convertAPNG2MP4())
-    .on('data', function() {}) // consume the stream...
-    .once('end', function endRecord() {
-        console.log("Wait for FFMPEG write up... the program will close automatically when it's done");
-    });
+new Promise((resolve) => {
+  vfs.src(`${__dirname}/animated-emojis/*/*.png`)
+  .pipe(convertAPNG2MP4())
+  .on('data', function() {}) // consume the stream...
+  .once('end', function endRecord() {
+      console.log("Wait for FFMPEG write up... the program will close automatically when it's done");
+      resolve();
+  });
+}); 
+
