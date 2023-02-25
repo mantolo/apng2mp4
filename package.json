@@ -14,6 +14,6 @@
         "canvas": "^2.6.1",
         "performance-now": "^2.1.0",
         "raf": "^3.3.2",
-        "vinyl-fs": "^2.4.4"
+        "vinyl-fs": "^3.0.3"
     }
 }
